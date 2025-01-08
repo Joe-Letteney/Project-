@@ -1,0 +1,249 @@
+import requests
+import json
+import os
+import shutil  # For copying the image file
+from datetime import datetime
+import pgeocode
+import openai
+
+# API details for image recognition
+url = "https://fashion4.p.rapidapi.com/v1/results"
+api_key = "6385fa75f4msh1f0f72bd6eccef2p144599jsna210032aec3e"
+
+# Headers for the API request
+headers = {
+    'x-rapidapi-key': api_key,
+    'x-rapidapi-host': "fashion4.p.rapidapi.com"
+}
+
+# Create the wardrobe directory if it doesn't exist
+wardrobe_dir = "wardrobe"
+if not os.path.exists(wardrobe_dir):
+    os.makedirs(wardrobe_dir)
+
+# Clothing type folders
+clothing_types = [
+    "Tops", "Outwear", "Vests", "Shorts", "Trousers", "Skirts", "Dresses",
+    "Glasses", "Hats", "Tie", "Watches", "Belts", "Tights", "Socks",
+    "Footwear", "Bags", "Scarfs"
+]
+
+# Create folders for each clothing type if they don't exist
+for clothing_type in clothing_types:
+    clothing_type_folder = os.path.join(wardrobe_dir, clothing_type)
+    if not os.path.exists(clothing_type_folder):
+        os.makedirs(clothing_type_folder)
+
+# Function to load the wardrobe items from existing files
+def load_wardrobe():
+    wardrobe = {}
+    for clothing_type in clothing_types:
+        clothing_type_folder = os.path.join(wardrobe_dir, clothing_type)
+        for item_file in os.listdir(clothing_type_folder):
+            if item_file.endswith(".txt"):
+                item_name = item_file.replace(".txt", "")
+                wardrobe[item_name] = clothing_type  # Add clothing item to the wardrobe
+    return wardrobe
+
+# Function to update the wardrobe with new items
+def update_wardrobe_with_image_recognition(image_path):
+    # Prepare the files and data for the request
+    files = {
+        'image': open(image_path, 'rb')  # Open the image file as binary
+    }
+
+    data = {}
+
+    # Send the POST request
+    response = requests.post(url, headers=headers, files=files, data=data)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        response_data = response.json()
+        wardrobe = {}
+
+        if "results" in response_data:
+            for result in response_data["results"]:
+                if "entities" in result:
+                    for entity in result["entities"]:
+                        if "classes" in entity:
+                            classes = entity["classes"]
+                            for clothing_item, confidence in classes.items():
+                                # Check if confidence is greater than 0.500
+                                if confidence > 0.500:
+                                    wardrobe[clothing_item] = None  # Add item to wardrobe (no confidence value)
+
+                                    # Add to the current date folder
+                                    current_date = datetime.now().strftime("%m-%d-%Y")
+                                    current_date_folder = os.path.join(wardrobe_dir, f"clothes_worn_on_{current_date}")
+                                    if not os.path.exists(current_date_folder):
+                                        os.makedirs(current_date_folder)
+                                    current_date_item_file = os.path.join(current_date_folder, f"{clothing_item}.txt")
+                                    with open(current_date_item_file, 'w') as file:
+                                        file.write(clothing_item)  # Save item name
+
+                                    # Add to the corresponding clothing type folder
+                                    for clothing_type in clothing_types:
+                                        if clothing_type.lower() in clothing_item.lower():
+                                            clothing_type_folder = os.path.join(wardrobe_dir, clothing_type)
+                                            clothing_type_item_file = os.path.join(clothing_type_folder, f"{clothing_item}.txt")
+                                            with open(clothing_type_item_file, 'w') as file:
+                                                file.write(clothing_item)  # Save item name
+                                            break
+
+        # Return the updated wardrobe
+        return wardrobe
+    else:
+        print(f"Request failed with status code: {response.status_code}")
+        print(response.text)
+        return {}
+
+# Preferred clothing pieces with their website links
+PREFERRED_CLOTHING_PIECES = {
+    "Lululemon Women's Crewneck": "https://shop.lululemon.com/p/womens-t-shirts/Love-Crew-SS-Updated/_/prod10550082?color=0001&locale=en_US&sl=US&sz=8&cid=Google_PMAX_US_NAT_EN_W_NB_New-Womens_ONLINE_ACQ_Y24_ag-&gad_source=1&gclid=Cj0KCQiA4fi7BhC5ARIsAEV1Yib3wt5ra6JEbGbAMVTBCz5sKhDXIztQgUjav82Bx37tGSKF3gIvBXcaAkYREALw_wcB&gclsrc=aw.ds",
+    "LL Bean Men's Traditional Short Sleeve Tee Shirt": "https://www.llbean.com/llb/shop/504193?itemId=224547&attrValue_0=Delta%20Blue&sku=0ASM414004&pla1=0&qs=3156266&gad_source=1&gclid=Cj0KCQiA4fi7BhC5ARIsAEV1YiYx0iZGlkgxy0AOBWWlor6hMh-WCvTEMyu4AnmF9qr1NN1wnifEPgsaAo11EALw_wcB&gclsrc=aw.ds&SN=PDPImageGallery_04&SS=A&SN2=sosb_test_04&SS2=B&SN3=MobilePLA_03&SS3=B&noaa_region=northeast&originalProduct=40651",
+    "Heat Holders Insulated Socks": "https://www.heatholders.com/products/mens-worxx-socks",
+    "Tommy Bahamas Hawaiian Shirt": "https://www.tommybahama.com/en/Coconut-Point-Sunset-Canopy-IslandZone%C2%AE-Camp-Shirt/p/ST326890-19324?utm_medium=shopping&utm_source=google&utm_campaign=TB_PLA_GG_X_X_X_X_X_Men_PMax_17947154116__&utm_product_id=ST326890-19324-XS&utm_content=omnichannel&gad_source=1&gclid=Cj0KCQiA4fi7BhC5ARIsAEV1YiawdP3ciFNl8rUFn3MbrHqxpEMzV-cwMTjnbvzg0eJUya2uRfXQO_oaAtGvEALw_wcB",
+    "LL Bean Women's Rain Jacket": "https://www.llbean.com/llb/shop/506593?itemId=506197&attrValue_0=Black&sku=0UML310004&pla1=0&qs=3156268&gad_source=1&gclid=Cj0KCQiA4fi7BhC5ARIsAEV1YibwXSlwJc0wPpOPaIFwuFmxH6mznI56f_abdpYvLOFsZQuDpuHoRKUaAjVvEALw_wcB&gclsrc=aw.ds&SN=PDPImageGallery_04&SS=A&SN2=sosb_test_04&SS2=B&SN3=MobilePLA_03&SS3=B&noaa_region=northeast&originalProduct=122081"
+}
+
+# Function to prompt the user for their ZIP code
+def get_zip() -> str:
+    """
+    Prompts the user for a ZIP code and validates it.
+    """
+    while True:
+        zip_code = input("Please enter your ZIP code (5 digits): ").strip()
+        if len(zip_code) == 5 and zip_code.isdigit():
+            return zip_code
+        else:
+            print("Invalid ZIP code. Please try again.")
+
+# Function to get latitude and longitude from a postal code
+def get_lat_long(postal_code):
+    """
+    Fetches latitude, longitude, and city/town name for a given US postal code.
+    """
+    nomi = pgeocode.Nominatim('us')  # Must be in US
+    location = nomi.query_postal_code(postal_code)
+    if location["latitude"] is None or location["longitude"] is None:
+        raise ValueError("Postal Code not found")
+    return location["latitude"], location["longitude"], location["place_name"]
+
+# Function to get NOAA weather data
+def get_noaa_weather(latitude: float, longitude: float) -> dict:
+    """
+    Fetches weather data from NOAA's Weather.gov API based on latitude and longitude.
+    """
+    base_url = "https://api.weather.gov/points"
+    try:
+        # Step 1: Get the forecast URL
+        points_url = f"{base_url}/{latitude},{longitude}"
+        points_response = requests.get(points_url)
+        points_response.raise_for_status()
+
+        points_data = points_response.json()
+        forecast_url = points_data["properties"]["forecast"]
+
+        # Step 2: Get the weather forecast
+        forecast_response = requests.get(forecast_url)
+        forecast_response.raise_for_status()
+
+        return forecast_response.json()
+
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Request error: {str(e)}"}
+
+# Personalize clothing suggestions based on weather and wardrobe
+def personalize_clothing_suggestions(weather_data: dict, zip_code: str, place_name: str, user_profile: dict):
+    """
+    Personalizes the clothing suggestions based on user's gender, style, and preferred clothing pieces.
+    Advocates for flip-flops where appropriate.
+    Integrates items from the user's wardrobe.
+    """
+    if "error" in weather_data:
+        return weather_data["error"]
+
+    # Extract relevant weather details for the prompt
+    forecast = weather_data["properties"]["periods"][0]
+    weather_details = {
+        "temperature": forecast["temperature"],
+        "temperatureUnit": forecast["temperatureUnit"],
+        "shortForecast": forecast["shortForecast"],
+        "detailedForecast": forecast["detailedForecast"]
+    }
+
+    # Start building the personalized prompt for GPT
+    prompt = f"""
+    Here is some simplified weather data for {place_name} (ZIP code {zip_code}):
+    {weather_details}
+
+    Based on this weather data, determine if it is okay to wear flip-flops today in city/town {place_name}. 
+    Also, suggest weather-appropriate clothing for a {user_profile['age']} year old {user_profile['gender']} with a {user_profile['style']} style.
+    Consider the user's preferences and recommend items from the following list of preferred clothing pieces:
+    {list(PREFERRED_CLOTHING_PIECES.keys())}
+
+    Be sure to take into account the user's style and gender when suggesting clothing. Advocate for wearing flip-flops where appropriate.
+    Also, use any clothing the user has in their wardrobe (identified through an AI fashion recognition process). For example, if it's cold, suggest a jacket or if it's warm, suggest sandals. Also, provide brand and website link information.
+    """
+
+    # Add clothing items from the user's wardrobe to the suggestions
+    wardrobe = load_wardrobe()
+    wardrobe_items = ", ".join(wardrobe.keys())
+    prompt += f" The user has the following clothing items in their wardrobe: {wardrobe_items}."
+
+    # Call the new OpenAI API (1.0.0 and above) for suggestions
+    openai.api_key = "API Key"
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are an assistant that provides weather-based fashion advice."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    # Extract GPT's response
+    answer = response['choices'][0]['message']['content']
+
+    # Post-process GPT's response to insert website links
+    for brand, website in PREFERRED_CLOTHING_PIECES.items():
+        answer = answer.replace(brand, f"{brand} ({website})")
+
+    return answer
+
+# Main function to process wardrobe and update it
+def main():
+    # Load existing wardrobe from previous runs
+    wardrobe = load_wardrobe()
+
+    # Prompt user for the image file path
+    image_path = input("Please enter the path to your image file: ")
+
+    # Update the wardrobe with the new items recognized from the image
+    new_wardrobe_items = update_wardrobe_with_image_recognition(image_path)
+
+    # Add new items to the existing wardrobe
+    wardrobe.update(new_wardrobe_items)
+
+    # Display the wardrobe
+    if wardrobe:
+        print("The following items have been added to your wardrobe:")
+        print(list(wardrobe.keys()))  # Only print the item names
+    else:
+        print("No items with confidence greater than 0.500 were detected.")
+
+    # Prompt user for their ZIP code
+    zip_code = get_zip()
+
+    # Get latitude, longitude, and place name
+    latitude, longitude, place_name = get_lat_long(zip_code)
+
+    # Fetch weather data
+    weather_data = get_noaa_weather(latitude, longitude)
+
+    # Personalize clothing suggestions considering the wardrobe
+    user_profile = {"name": "Gus", "gender": "Male", "style": "casual", "age": "28"}
+    result = personalize_clothing_suggestions(weather_data, zip_code, place_name, user_profile)
+    print(result)
+
+if __name__ == "__main__":
+    main()

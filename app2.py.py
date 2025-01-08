@@ -73,7 +73,7 @@ def personalize_clothing_suggestions(weather_data, zip_code, place_name, user_pr
     Advocate for wearing flip-flops where appropriate.
     """
 
-    openai.api_key =
+    openai.api_key =#Enter your API key here 
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[

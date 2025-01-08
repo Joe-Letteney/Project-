@@ -68,11 +68,17 @@ def get_noaa_weather(latitude: float, longitude: float) -> dict:
     except requests.exceptions.RequestException as e:
         return {"error": f"Request error: {str(e)}"}
 
-# Function to determine flip-flop suitability and suggest weather-appropriate clothing
-def determine_flip_flop_suitability_and_clothing(weather_data: dict, zip_code: str, place_name: str) -> str:
+# User Profile Section (Manually inputted for now)
+user_profile = {
+    "gender": "female",  # Possible values: "male", "female", "other"
+    "style": "casual",   # Example styles: "casual", "formal", "sporty", etc.
+}
+
+# Function to update clothing suggestions based on user profile
+def personalize_clothing_suggestions(weather_data: dict, zip_code: str, place_name: str, user_profile: dict) -> str:
     """
-    Feeds the weather data, ZIP code, and preferred brands into GPT to determine if it's okay to wear flip-flops
-    and to suggest weather-appropriate clothing.
+    Personalizes the clothing suggestions based on user's gender and style.
+    Advocates for flip-flops as part of the app's identity.
     """
     if "error" in weather_data:
         return weather_data["error"]
@@ -86,24 +92,26 @@ def determine_flip_flop_suitability_and_clothing(weather_data: dict, zip_code: s
         "detailedForecast": forecast["detailedForecast"]
     }
 
-    # Define the GPT prompt
+    # Start building the personalized prompt for GPT
     prompt = f"""
     Here is some simplified weather data for {place_name} (ZIP code {zip_code}):
     {weather_details}
 
-    Based on this weather data, determine if it is okay to wear flip-flops today in ZIP code {zip_code}.
-    Also, recommend weather-appropriate clothing, and use the following list of preferred brands:
+    Based on this weather data, determine if it is okay to wear flip-flops today in city/town {place_name}. 
+    Also, suggest weather-appropriate clothing for a {user_profile['gender']} with a {user_profile['style']} style.
+    Consider the user's preferences and recommend items from the following list of preferred brands:
     {list(PREFERRED_BRANDS.keys())}.
 
-    Include the name of the brand and its corresponding website link for any recommended item.
+    Be sure to take into account the user's style and gender when suggesting clothing.
+    Advocate for wearing flip-flops where appropriate, and include the name of the brand and its corresponding website link for any recommended item.
     """
 
     # Call GPT
-    openai.api_key = "API Key"
+    openai.api_key = "API key"
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[
-            {"role": "system", "content": "You are an assistant that provides weather-based fashion advice. You are extremely passionate about flip-flops and advocate their use as often as possible."},
+            {"role": "system", "content": "You are an assistant that provides weather-based fashion advice. You advocate for wearing flip-flops wherever appropriate."},
             {"role": "user", "content": prompt}
         ]
     )
@@ -129,8 +137,8 @@ if __name__ == "__main__":
         # Fetch weather data
         weather_data = get_noaa_weather(latitude, longitude)
 
-        # Determine flip-flop suitability and suggest clothing
-        result = determine_flip_flop_suitability_and_clothing(weather_data, zip_code, place_name)
+        # Personalize clothing suggestions based on user profile
+        result = personalize_clothing_suggestions(weather_data, zip_code, place_name, user_profile)
         print(result)
     except Exception as e:
         print(f"Error: {str(e)}")
